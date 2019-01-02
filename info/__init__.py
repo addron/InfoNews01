@@ -44,7 +44,10 @@ def create_app(config_type):
     app.register_blueprint(home_blue)
     from info.modules.passport import passport_blue
     app.register_blueprint(passport_blue)
-
+    from info.modules.news import news_blue
+    app.register_blueprint(news_blue)
+    from info.modules.user import user_blue
+    app.register_blueprint(user_blue)
     # 项目关联模型文件   import *语法不能在函数/方法中使用
     # from info import models
 

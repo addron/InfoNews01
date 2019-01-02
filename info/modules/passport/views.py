@@ -1,7 +1,9 @@
 # 管理登陆注册流程
 import random
+from datetime import datetime
 
-from flask import request, abort, current_app, make_response, jsonify, session, flash
+from flask import request, abort, current_app, make_response, session, flash
+from flask.json import jsonify
 
 from info import rs, db
 from info.utils.constants import IMAGE_CODE_REDIS_EXPIRES, SMS_CODE_REDIS_EXPIRES
@@ -112,7 +114,9 @@ def register():
     user.mobile = mobile
     user.nick_name = mobile
 
-    user.password = password
+    # 为方便下面测试，先不加密
+    # user.password = password
+    user.password_hash = password
 
     db.session.add(user)
     try:
@@ -124,7 +128,7 @@ def register():
 
     # 记录ID
     session['user_id'] = user.id
-    flash("注册成功")
+    # flash("注册成功")
     return jsonify(errno=RET.OK, errmsg=error_map[RET.OK])
 
 
@@ -136,8 +140,8 @@ def login():
     password = request.json.get("password")
 
     # 校验参数
-    if not all([mobile,password]):
-        return jsonify(error=RET.PARAMERR,errmsg=error_map[RET.PARAMERR])
+    if not all([mobile, password]):
+        return jsonify(error=RET.PARAMERR, errmsg=error_map[RET.PARAMERR])
 
     # 取出用户数据
     try:
@@ -149,7 +153,7 @@ def login():
     # 判断用户是否存在
     if not user:
         # 用户不存在或未激活",  RET.USERERR
-        return jsonify(error= RET.USERERR,errmsg=error_map[RET.USERERR])
+        return jsonify(error=RET.USERERR, errmsg=error_map[RET.USERERR])
 
     # 校验密码
     if not user.check_password(password):
@@ -160,15 +164,17 @@ def login():
     session['user_id'] = user.id
 
     # # 记录最后登录时间  使用sqlalchemy自动提交机制
-    # user.last_login = datetime.now()
-    flash("登陆成功")
-    return jsonify(error=RET.OK, errmsg=error_map[RET.OK])
+    user.last_login = datetime.now()
+    # flash("登陆成功")
+    #
+    # return jsonify(error=RET.OK, errmsg=error_map[RET.OK])
+    return jsonify(errno=RET.OK, errmsg=error_map[RET.OK])
+
 
 # 退出登陆
-
 @passport_blue.route("/logout")
 def logout():
     # 删除session中的user_id
-    session.pop("user_id",None)
-    flash("已退出")
-    return jsonify(error = RET.OK,errmsg=error_map[RET.OK])
+    session.pop("user_id", None)
+    # flash("已退出")
+    return jsonify(error=RET.OK, errmsg=error_map[RET.OK])

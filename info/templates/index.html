@@ -28,7 +28,7 @@
             <div class="user_login fr">
                 <img {% if user.avatar_url %}src="{{ user.avatar_url }}" {% else %}
                      src="../static/news/images/person01.png"{% endif %} class="lgin_pic">
-                <a href="#" id="nick_name">{{ user.nick_name }}</a>
+                <a href="{{ url_for("user.user_info") }}" id="nick_name">{{ user.nick_name }}</a>
                 <a href="javascript:;" onclick="logout()">退出</a>
             </div>
 
@@ -102,7 +102,6 @@
             <h3>点击排行</h3>
         </div>
         <ul class="rank_list">
-
 
             {% for news in rank_list %}
                 <li><span class="{{ loop.index | index_convert }}">{{ loop.index }}</span><a href="/news/1">{{ news.title }}</a></li>
