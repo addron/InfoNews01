@@ -2,6 +2,8 @@ import time
 from datetime import datetime, timedelta
 
 from flask import url_for, request, session, redirect, render_template, current_app, g, abort, jsonify
+
+from info import db
 from info.modules.admin import admin_blue
 from info.utils.common import user_login_data, file_upload
 from info.utils.constants import USER_COLLECTION_MAX_NEWS, QINIU_DOMIN_PREFIX
@@ -379,12 +381,40 @@ def news_edit_detail_post():
             current_app.logger.error(e)
             return jsonify(errno=RET.THIRDERR, errmsg=error_map[RET.THIRDERR])
 
-     # json返回
+    # json返回
     return jsonify(errno=RET.OK, errmsg=error_map[RET.OK])
 
 
+# 新闻分类
+@admin_blue.route('/news_type', methods=['GET', 'POST'])
+def news_type():
+    # 先查页面
+    if request.method == 'GET':
+        # 分类数据
+        try:
+            categories = Category.query.filter(Category.id != 1)
+        except BaseException as e:
+            current_app.logger.error(e)
+            return abort(500)
+        return render_template("admin/news_type.html",categories=categories)
 
+    # POST 修改
+    id = request.json.get("id")
+    name = request.json.get("name")
+    if not name:
+        return jsonify(errno=RET.PARAMERR, errmsg=error_map[RET.PARAMERR])
 
+    if id:  # 修改
+        try:
+            id = int(id)
+            category = Category.query.get(id)
+            category.name = name
+        except BaseException as e:
+            current_app.logger.error(e)
+            return jsonify(errno=RET.PARAMERR, errmsg=error_map[RET.PARAMERR])
+    else: # 新增
+        new_category = Category(name=name)
+        db.session.add(new_category)
 
-
+    return jsonify(errno=RET.OK, errmsg=error_map[RET.OK])
 
