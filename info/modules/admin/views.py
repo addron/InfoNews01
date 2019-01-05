@@ -1,14 +1,16 @@
 import time
 from datetime import datetime, timedelta
 
-from flask import url_for, request, session, redirect, render_template, current_app, g, abort
+from flask import url_for, request, session, redirect, render_template, current_app, g, abort, jsonify
 from info.modules.admin import admin_blue
 from info.utils.common import user_login_data
 from info.utils.constants import USER_COLLECTION_MAX_NEWS
-from info.utils.models import User
-
+from info.utils.models import User, News, Category
 
 # 首页
+from info.utils.response_code import RET, error_map
+
+
 @admin_blue.route('/index')
 @user_login_data
 def index():
@@ -168,4 +170,165 @@ def user_list():
         "total_page": pn.pages
     }
 
-    return render_template("admin/user_list.html",data=data)
+    return render_template("admin/user_list.html", data=data)
+
+
+# 新闻审核列表 News
+@admin_blue.route('/news_review')
+def news_review():
+    # 获取参数
+    p = request.args.get("p", 1)
+    # keyword 是模糊搜索
+    keyword = request.args.get("keyword")
+
+    # 校验
+    try:
+        p = int(p)
+    except BaseException as e:
+        current_app.logger.error(e)
+        return abort(403)
+
+    # 分页查询新闻
+    filter_list = []
+    if keyword:
+        filter_list.append(News.title.contains(keyword))
+
+    try:
+        pn = News.query.filter(*filter_list).paginate(p, USER_COLLECTION_MAX_NEWS)
+    except BaseException as e:
+        current_app.logger.error(e)
+        return abort(500)
+
+    # json
+    data = {
+        "news_list": [news for news in pn.items],
+        "cur_page": pn.page,
+        "total_page": pn.pages
+    }
+
+    # 返回
+    return render_template("admin/news_review.html", data=data)
+
+
+# 新闻审核详情页面　要用News
+
+@admin_blue.route('/news_review_detail/<int:news_id>')
+def news_review_detail(news_id):
+    # 根据news_id查新闻
+    try:
+        news = News.query.get(news_id)
+    except BaseException as e:
+        current_app.logger.error(e)
+        return abort(500)
+
+    return render_template("admin/news_review_detail.html", news=news.to_dict())
+
+
+# 新闻审核结果
+@admin_blue.route('/news_review_action', methods=['POST'])
+@user_login_data
+def news_reviews_action():
+    # 获取参数
+    news_id = request.json.get("news_id")
+    action = request.json.get("action")
+    reason = request.json.get("reason")
+    # 校验
+    if not all([news_id, action]):
+        return jsonify(errno=RET.PARAMERR, errmsg=error_map[RET.PARAMERR])
+
+    if action not in ['accept', 'reject']:
+        return jsonify(errno=RET.PARAMERR, errmsg=error_map[RET.PARAMERR])
+
+    try:
+        news_id = int(news_id)
+    except BaseException as e:
+        current_app.logger.error(e)
+        return jsonify(errno=RET.PARAMERR, errmsg=error_map[RET.PARAMERR])
+
+    # news_id 查询新闻
+    try:
+        news = News.query.get(news_id)
+    except BaseException as e:
+        current_app.logger.error(e)
+        return jsonify(errno=RET.DBERR, errmsg=error_map[RET.DBERR])
+
+    # 根据action值修改新闻状态 status
+    if action == "accept":  # 通过
+        news.status = 0
+    else:
+        if not reason:  # 未通过且没有理由
+            return jsonify(errno=RET.PARAMERR, errmsg=error_map[RET.PARAMERR])
+        news.reason = reason
+        news.status = -1
+
+    # 返回json
+    return jsonify(errno=RET.OK, errmsg=error_map[RET.OK])
+
+
+# 编辑列表
+@admin_blue.route('/news_edit')
+def news_edit():
+    p = request.args.get("p", 1)
+    # keyword 是模糊搜索
+    keyword = request.args.get("keyword")
+
+    # 校验
+    try:
+        p = int(p)
+    except BaseException as e:
+        current_app.logger.error(e)
+        return abort(403)
+
+    # 分页查询新闻
+    filter_list = []
+    if keyword:
+        filter_list.append(News.title.contains(keyword))
+
+    try:
+        pn = News.query.filter(*filter_list).paginate(p, USER_COLLECTION_MAX_NEWS)
+    except BaseException as e:
+        current_app.logger.error(e)
+        return abort(500)
+
+    # json
+    data = {
+        "news_list": [news for news in pn.items],
+        "cur_page": pn.page,
+        "total_page": pn.pages
+    }
+
+    # 返回
+    return render_template("admin/news_edit.html", data=data)
+
+
+# 编辑列表详情
+
+@admin_blue.route('/news_edit_detail/<int:news_id>')
+def news_edit_detail(news_id):
+    # news_id查找新闻
+
+    try:
+        news = News.query.get(news_id)
+    except BaseException as e:
+        current_app.logger.error(e)
+        return abort(500)
+
+    # 查询所有分类
+    try:
+        categories = Category.query.filter(Category.id != 1).all()
+    except BaseException as e:
+        current_app.logger.error(e)
+        return abort(500)
+
+    # 要找新闻的当前分类
+    category_list = []
+    for category in categories:
+        category_dict = category.to_dict()
+
+        is_selected = False
+        if category.id == news.category_id:
+            is_selected = True
+        category_dict["is_selected"] = is_selected
+        category_list.append(category_dict)
+        # 传入模板渲染
+        return render_template("admin/news_edit_detail.html", news=news.to_dict(), category_list=category_list)
