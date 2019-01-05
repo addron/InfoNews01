@@ -3,8 +3,8 @@ from datetime import datetime, timedelta
 
 from flask import url_for, request, session, redirect, render_template, current_app, g, abort, jsonify
 from info.modules.admin import admin_blue
-from info.utils.common import user_login_data
-from info.utils.constants import USER_COLLECTION_MAX_NEWS
+from info.utils.common import user_login_data, file_upload
+from info.utils.constants import USER_COLLECTION_MAX_NEWS, QINIU_DOMIN_PREFIX
 from info.utils.models import User, News, Category
 
 # 首页
@@ -212,6 +212,7 @@ def news_review():
 
 # 新闻审核详情页面　要用News
 
+
 @admin_blue.route('/news_review_detail/<int:news_id>')
 def news_review_detail(news_id):
     # 根据news_id查新闻
@@ -302,7 +303,6 @@ def news_edit():
 
 
 # 编辑列表详情
-
 @admin_blue.route('/news_edit_detail/<int:news_id>')
 def news_edit_detail(news_id):
     # news_id查找新闻
@@ -330,5 +330,61 @@ def news_edit_detail(news_id):
             is_selected = True
         category_dict["is_selected"] = is_selected
         category_list.append(category_dict)
-        # 传入模板渲染
-        return render_template("admin/news_edit_detail.html", news=news.to_dict(), category_list=category_list)
+    # 传入模板渲染
+    return render_template("admin/news_edit_detail.html", news=news.to_dict(), category_list=category_list)
+
+
+# 提交编辑新闻   一个路由可以注册多个视图函数对应不同的请求方式，但视图函数名字不能相同
+@admin_blue.route('/news_edit_detail', methods=['POST'])
+def news_edit_detail_post():
+    # 获取参数
+    news_id = request.form.get("news_id")
+    title = request.form.get("title")
+    category_id = request.form.get("category_id")
+    digest = request.form.get("digest")
+    content = request.form.get("content")
+    index_image = request.files.get("index_image")
+
+    # 校验
+    if not all([news_id, title, category_id, digest, content]):
+        return jsonify(errno=RET.PARAMERR, errmsg=error_map[RET.PARAMERR])
+    try:
+        news_id = int(news_id)
+        category_id = int(category_id)
+    except BaseException as e:
+        current_app.logger.error(e)
+        return jsonify(errno=RET.PARAMERR, errmsg=error_map[RET.PARAMERR])
+
+    # 查询新闻数据
+    try:
+        news = News.query.get(news_id)
+    except BaseException as e:
+        current_app.logger.error(e)
+        return jsonify(errno=RET.DBERR, errmsg=error_map[RET.DBERR])
+
+    # 修改
+    news.title = title
+    news.category_id = category_id
+    news.digest = digest
+    news.content = content
+
+    if index_image:
+        try:
+            img_bytes = index_image.read()
+
+            # 上传到七牛云
+            file_name = file_upload(img_bytes)
+            news.index_image_url = QINIU_DOMIN_PREFIX + file_name
+        except BaseException as e:
+            current_app.logger.error(e)
+            return jsonify(errno=RET.THIRDERR, errmsg=error_map[RET.THIRDERR])
+
+     # json返回
+    return jsonify(errno=RET.OK, errmsg=error_map[RET.OK])
+
+
+
+
+
+
+
