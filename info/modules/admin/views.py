@@ -1,9 +1,10 @@
 import time
 from datetime import datetime, timedelta
 
-from flask import url_for, request, session, redirect, render_template, current_app, g
+from flask import url_for, request, session, redirect, render_template, current_app, g, abort
 from info.modules.admin import admin_blue
 from info.utils.common import user_login_data
+from info.utils.constants import USER_COLLECTION_MAX_NEWS
 from info.utils.models import User
 
 
@@ -138,3 +139,33 @@ def user_count():
     }
 
     return render_template("admin/user_count.html", data=data)
+
+
+# 用户列表 要用User
+@admin_blue.route('/user_list')
+def user_list():
+    # 获取参数
+    p = request.args.get("p", 1)
+
+    # 校验
+    try:
+        p = int(p)
+    except BaseException as e:
+        current_app.logger.error(e)
+        return abort(403)
+
+    # 查询用户表　User
+    try:
+        pn = User.query.paginate(p, USER_COLLECTION_MAX_NEWS)
+    except BaseException as e:
+        current_app.logger.error(e)
+        return abort(500)
+
+    # 返回json
+    data = {
+        "user_list": [user.to_admin_dict() for user in pn.items],
+        "cur_page": pn.page,
+        "total_page": pn.pages
+    }
+
+    return render_template("admin/user_list.html",data=data)
